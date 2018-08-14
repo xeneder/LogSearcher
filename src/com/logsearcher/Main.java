@@ -15,10 +15,8 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.util.Callback;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -269,37 +267,42 @@ public class Main extends Application {
      */
     private void fileSelectionHandler(TextField searchTextField, TreeView<File> treeView, TabPane tabPane) {
         TreeItem<File> selectedItem = treeView.getSelectionModel().getSelectedItem();
+
+        Task<Tab> task = new Task<>() {
+            @Override
+            protected Tab call() {
+                StringBuilder content = new StringBuilder();
+                try {
+                    String s;
+                    String path = selectedItem.getValue().getCanonicalPath();
+                    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(
+                            new FileInputStream(path), StandardCharsets.UTF_8));
+                    while ((s = bufferedReader.readLine()) != null) {
+                        content.append(s).append('\n');
+                    }
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                }
+                TextArea contentArea = new TextArea(content.toString());
+                contentArea.setEditable(false);
+
+                Tab tab = new Tab();
+                tab.setText(selectedItem.getValue().getName());
+                tab.setContent(contentArea);
+                return tab;
+            }
+        };
+
+        task.setOnSucceeded(e -> {
+            tabPane.getTabs().add(task.getValue());
+            tabPane.getSelectionModel().select(task.getValue());
+
+            refreshTab(tabPane.getSelectionModel().getSelectedItem(), searchTextField);
+        });
+
         if (selectedItem != null) {
             File selectedFile = selectedItem.getValue();
             if (selectedFile.exists() && selectedFile.isFile()) {
-                Task<Tab> task = new Task<>() {
-                    @Override
-                    protected Tab call() {
-                        StringBuilder content = new StringBuilder();
-                        try {
-                            for (String s : Files.readAllLines(Paths.get(selectedItem.getValue().getCanonicalPath()))) {
-                                content.append(s).append('\n');
-                            }
-                        } catch (IOException e1) {
-                            e1.printStackTrace();
-                        }
-                        TextArea contentArea = new TextArea(content.toString());
-                        contentArea.setEditable(false);
-
-                        Tab tab = new Tab();
-                        tab.setText(selectedItem.getValue().getName());
-                        tab.setContent(contentArea);
-                        return tab;
-                    }
-                };
-
-                task.setOnSucceeded(e -> {
-                    tabPane.getTabs().add(task.getValue());
-                    tabPane.getSelectionModel().select(task.getValue());
-
-                    refreshTab(tabPane.getSelectionModel().getSelectedItem(), searchTextField);
-                });
-
                 new Thread(task).start();
             }
         }
